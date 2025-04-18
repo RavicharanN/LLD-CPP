@@ -7,6 +7,7 @@
 #include <unordered_set>
 // #include<shared_ptr>
 #include <memory>
+#include <cassert>
 using namespace std;
 using namespace std::chrono;
 
@@ -118,4 +119,39 @@ private:
 int main()
 {
     // RateLimiter *ratelim = new RateLimiter(30, 10. 10);
+    RateLimiter rl(5, 3, 10);
+    assert(rl.processRequest("alice") == true);
+    assert(rl.processRequest("alice") == true);
+    assert(rl.processRequest("alice") == true);
+    assert(rl.processRequest("alice") == false);
+    cout << "[Test] Basic rate limiting test passed.\n";
+
+    // Spawn threads to simulate requests
+    vector<thread> workers;
+    for (int i = 0; i < 3; ++i) {
+        workers.emplace_back([&rl, i] {
+            string user = "user" + to_string(i);
+            for (int j = 0; j < 10; ++j) {
+                bool ok = rl.processRequest(user);
+                cout << "[Worker " << i << "] Request #" << j
+                     << (ok ? " allowed" : " denied") << " for " << user << "\n";
+                this_thread::sleep_for(milliseconds(200));
+            }
+        });
+    }
+
+    // Cleaner thread
+    thread cleaner([&rl] {
+        for (int k = 0; k < 3; ++k) {
+            this_thread::sleep_for(seconds(5));
+            rl.cleanInactiveUsers();
+        }
+    });
+
+    // Join workers
+    for (auto& t : workers) t.join();
+    cleaner.join();
+
+    cout << "[Main] Simulation complete.\n";
+    return 0;
 }
